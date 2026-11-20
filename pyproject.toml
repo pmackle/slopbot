@@ -1,7 +1,7 @@
 [project]
 name = "slopbot"
 version = "0.1.0"
-description = "A Slack bot that tells you whether something is AI slop, and why. With attitude."
+description = "A Slack bot that tells you if something was written by AI, and why."
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Patrick Mackle" }]

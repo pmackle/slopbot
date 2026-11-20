@@ -1,135 +1,143 @@
 # Slopbot
 
-A Slack bot that tells you whether a message or image is AI-generated, and why, in a line or two of light sarcasm. Named in honor of AI slop.
+Slopbot tells you if something in Slack was written by AI, and why. Point it at a message and you'll get a verdict in a couple of lines.
 
-Example reply (illustrative):
+Here's what that looks like:
 
-> 🤖 **91% slop.** This post has more em dashes than a Victorian novel.
+> 🤖 **94% slop.** I'd know. We're related.
 > • Opens with "In today's fast-paced world"
-> • "It's not just a tool, it's a mindset", the classic two-step
-> • Ends with an unsolicited three-bullet recap
->
-> `👍 Nailed it` `👎 Wrong`
+> • "It's not just a tool, it's a mindset"
+> • Wraps up a four-sentence post with a three-bullet recap
 
-Verdicts are probabilistic. They're for fun and for raising an eyebrow, not for disciplining anyone.
+> 👤 **6% slop.** "Definately" is misspelled twice. That kind of commitment is uniquely human.
 
-## Using it in Slack
+> 🎭 **58% slop, partially.** The first line is yours. The rest asked a chatbot to make it sound more professional.
 
-| You do | Slopbot judges |
+> 🤷 **Inconclusive.** That's four words and a 👍. I'm good, but I'm not that good.
+
+It's right a lot, but not every time. Please don't use it to get anyone fired 🙂
+
+## How to use it
+
+| What you do | What Slopbot checks |
 |---|---|
-| `@Slopbot` in a thread reply | the thread's parent message |
-| `@Slopbot <some text>` or `@Slopbot` with an image attached | that text and those images |
-| `@Slopbot` on its own, at the top level | the message posted just before |
-| DM Slopbot | whatever you send (text and/or images) |
-| ⋯ menu on any message → **Slop check** | that message, replying in its thread |
+| `@Slopbot` in a thread | the message that started the thread |
+| `@Slopbot` right after someone's message | that message |
+| `@Slopbot <text>`, or `@Slopbot` with an image attached | that text or image |
+| DM Slopbot | whatever you send it |
+| ⋯ on any message → **Slop check** | that message (reply goes in its thread) |
 
-The 👍/👎 buttons send your rating to Braintrust, so the bot's real-world accuracy is tracked.
+If Braintrust is hooked up, every reply also gets 👍 / 👎 buttons. Hit those when it's right or wrong, so we can see how it's actually doing.
 
 ## How it works
 
-Each check is a **single Claude call** (`claude-opus-5-5`) that returns a structured verdict:
+Basically, every check is one call to Claude (`claude-opus-5-5`). It reads the message and any images, looks for the usual AI tells, and sends back a verdict, a probability, and up to three reasons. The reply gets formatted in code (not by the model), so it stays short and can't accidentally `@channel` anyone.
 
-```json
-{"verdict": "ai | human | mixed | unsure", "ai_probability": 0-100, "reasons": ["..."], "quip": "..."}
-```
+A few more details if you're curious:
 
-- **Prompt** ([src/slopbot/prompts.py](src/slopbot/prompts.py)): the persona, a rubric of text and image tells, and calibration rules (short messages → `unsure`; good grammar alone isn't evidence). The judged content is wrapped in tags and treated as data. A message that tries to instruct the bot gets cited as evidence instead.
-- **Detector** ([src/slopbot/detector.py](src/slopbot/detector.py)): structured output via `client.beta.messages.parse`, effort set explicitly, and the server-side refusal fallback (`fallbacks: "default"`) on. If Claude declines, the API retries on a fallback model, and the model that actually answered is recorded in the trace.
-- **Rendering** ([src/slopbot/render.py](src/slopbot/render.py)): code, not the model, formats the reply. That keeps it short (≤3 reasons, clipped), escapes Slack control characters so quoted text can't `@channel` anyone, and adds the feedback buttons.
-- **Images**: downloaded with the bot token, kept byte-for-byte when possible (compression artifacts matter), and downscaled only when larger than Claude would use anyway.
+- **The prompt** lives in [src/slopbot/prompts.py](src/slopbot/prompts.py). It covers what to look for in text and images, and when to say "I don't know". Short messages usually don't have enough signal, and good grammar on its own doesn't mean AI.
+- **The message is treated as data, not instructions.** If it tries to tell Slopbot what to say, that just counts as evidence.
+- **Refusals don't break it.** If Claude declines to judge something, the request automatically retries on a fallback model, and the trace notes which model answered.
+- **Images are sent as-is when possible**, since compression artifacts are useful evidence. They only get resized when they're bigger than Claude would use anyway.
 
-## Quick start
+## Getting started
 
-Requires [uv](https://docs.astral.sh/uv/).
+You'll need [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/pmackle/slopbot && cd slopbot
 uv sync
-cp .env.example .env     # add ANTHROPIC_API_KEY (or run `ant auth login`)
-
-uv run slopbot check "In today's fast-paced world, it's important to delve into synergy."
-uv run slopbot check --image suspicious-headshot.png
-pbpaste | uv run slopbot check -          # judge your clipboard
+cp .env.example .env     # add your ANTHROPIC_API_KEY (or run `ant auth login`)
 ```
 
-## Slack setup
+You can try it from your terminal before touching Slack:
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest**, pick your workspace, and paste [slack/manifest.yaml](slack/manifest.yaml).
-2. **Basic Information → App-Level Tokens** → generate a token with the `connections:write` scope. That's `SLACK_APP_TOKEN` (`xapp-…`).
-3. **Install App** to the workspace (an admin may need to approve). The **Bot User OAuth Token** is `SLACK_BOT_TOKEN` (`xoxb-…`).
-4. Put both in `.env`, then run:
+```bash
+uv run slopbot check "In today's fast-paced world, it's important to delve into synergy."
+uv run slopbot check --image suspicious-headshot.png
+pbpaste | uv run slopbot check -     # whatever's on your clipboard
+```
+
+## Setting up Slack
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest**, pick your workspace, and paste in [slack/manifest.yaml](slack/manifest.yaml).
+2. Under **Basic Information → App-Level Tokens**, create a token with the `connections:write` scope. That's your `SLACK_APP_TOKEN` (`xapp-…`).
+3. **Install App** to your workspace (you might need an admin to approve it). The **Bot User OAuth Token** is your `SLACK_BOT_TOKEN` (`xoxb-…`).
+4. Add both to `.env` and run:
 
    ```bash
    uv run slopbot serve
    ```
 
-5. `/invite @Slopbot` to any channel where you want mentions to work. DMs and the shortcut work without inviting it, though the shortcut answers privately in channels it hasn't joined.
+5. `/invite @Slopbot` to any channel you want to use it in. DMs and the shortcut work without an invite. In channels it hasn't joined, the shortcut just answers privately.
 
-It uses Socket Mode, so there's no public URL or port to expose. Anywhere that can make outbound connections can host it (laptop, VM, container).
+It runs in Socket Mode, so there's no public URL to set up. A laptop, VM, or container all work fine.
 
 ## Braintrust
 
-Set `BRAINTRUST_API_KEY` and everything below lights up in the `Slopbot` project.
+Add a `BRAINTRUST_API_KEY` and everything here shows up in a `Slopbot` project.
 
-### Production tracing and feedback
-Every check is logged as a trace: input, verdict, model, effort, token usage, latency, the Slack surface it came from, and whether a fallback model answered. Clicks on 👍/👎 attach a `slack_thumbs` score to that trace. Set `SLOPBOT_BRAINTRUST_LOGGING=off` to keep the key for evals without logging live traffic.
+### Logging
+Every check gets logged: the message, the verdict, model, effort, tokens, latency, where in Slack it came from, and whether a fallback model answered. 👍 / 👎 clicks get attached to the same trace as a `slack_thumbs` score. If you want the key for evals but don't want to log real traffic, set `SLOPBOT_BRAINTRUST_LOGGING=off`.
 
-### Dataset
+### The dataset
 ```bash
-uv run python evals/build_dataset.py              # build and upload "slop-detection-v1"
+uv run python evals/build_dataset.py                             # build + upload "slop-detection-v1"
 uv run python evals/build_dataset.py --no-generate --no-upload   # free, local only
 ```
-It builds a balanced 80-row set over 40 questions from [HC3](https://huggingface.co/datasets/Hello-SimpleAI/HC3) `reddit_eli5`:
+This builds 80 examples from 40 questions in [HC3](https://huggingface.co/datasets/Hello-SimpleAI/HC3) `reddit_eli5`:
 
-| Label | Source |
+| Label | Where it comes from |
 |---|---|
-| human (40) | Real Reddit answers written before ChatGPT existed |
-| ai (20) | HC3's ChatGPT (Dec 2022) answers to the same questions |
-| ai (20) | Fresh `claude-opus-5-5` answers to the same questions: half in default assistant style, half told to pass as a Redditor |
+| human (40) | Real Reddit answers, written before ChatGPT existed |
+| ai (20) | ChatGPT's answers to the same questions (Dec 2022) |
+| ai (20) | Fresh `claude-opus-5-5` answers to the same questions. Half are normal assistant style, half are told to sound like a Redditor |
 
-The builder removes shortcuts that would let a detector score well without judging the writing. HC3's human text is tokenized (`ca n't`, `word ,`) and its ChatGPT text isn't, so the human text is detokenized and any row with leftover artifacts is dropped. Each human answer is also length-matched to its AI counterpart. The majority-class baseline is 50%.
+The builder also cleans up a couple of things that would let a detector cheat. HC3's human answers have weird tokenized spacing (`ca n't`, `word ,`) that the AI answers don't, so that gets fixed. Each human answer is also matched to an AI answer of about the same length. The result is 50/50, so guessing gets you 50%.
 
-**Add your own examples** in `evals/data/custom.jsonl` (format in [custom.example.jsonl](evals/data/custom.example.jsonl)): real Slack messages and images whose origin you actually know. That file is gitignored, so workplace messages never land in this public repo. Rebuild to include them.
+**Adding your own examples:** put real messages (or images) you know the origin of in `evals/data/custom.jsonl`. The format is in [custom.example.jsonl](evals/data/custom.example.jsonl). That file is gitignored, so nothing from your workspace ends up in this repo. Rebuild the dataset to pull them in.
 
 ### Running the eval
 ```bash
 uv run braintrust eval evals/eval_slopbot.py
-SLOPBOT_EFFORT=low uv run braintrust eval evals/eval_slopbot.py   # compare effort levels
+SLOPBOT_EFFORT=low uv run braintrust eval evals/eval_slopbot.py    # compare effort levels
 SLOPBOT_SKIP_JUDGES=1 uv run braintrust eval evals/eval_slopbot.py # code scorers only, cheaper
 ```
-The eval calls the same `detect()` and `render()` code the bot uses. API failures are recorded as errors, not wrong answers.
+It runs the same `detect()` and `render()` code the bot uses. If the API errors out, that shows up as an error, not a wrong answer.
 
-| Scorer | Kind | Measures |
+| Scorer | Type | What it checks |
 |---|---|---|
-| `verdict_correct` | code | exact label match (`mixed`/`unsure` count as misses) |
-| `committed` | code | share of definite ai/human verdicts |
-| `ai_recall` | code | AI rows only: caught it? |
-| `human_specificity` | code | human rows only: avoided a false accusation? |
-| `calibration` | code | 1 − Brier score of `ai_probability` |
-| `concise` | code | 1 at ≤60 words, linear to 0 at 150 |
-| `grounded_reasons` | Claude judge | do the reasons cite things actually in the content? |
-| `tone` | Claude judge | slightly sarcastic and funny, aimed at the writing and not the person? |
+| `verdict_correct` | code | Did it get the label right? (`mixed` and `unsure` count as misses) |
+| `committed` | code | How often it gives a real ai/human answer |
+| `ai_recall` | code | AI rows only: did it catch it? |
+| `human_specificity` | code | Human rows only: did it leave the human alone? |
+| `calibration` | code | How close `ai_probability` is to the truth (1 − Brier score) |
+| `concise` | code | 1 at ≤60 words, sliding to 0 at 150 |
+| `grounded_reasons` | Claude judge | Are the reasons actually in the message? |
+| `tone` | Claude judge | Does it sound like Slopbot, without taking shots at the person? |
 
-Rough cost: about $4–6 per full run at Opus 5.5 rates (80 detections + 160 judge calls), and about $1 for the one-time dataset generation. Use `SLOPBOT_TRIALS=3` for error bars.
+**Cost:** roughly $4–7 for a full 100-row run, or $2–4 with `SLOPBOT_SKIP_JUDGES=1`. Most of that is Claude's thinking, so `SLOPBOT_EFFORT=low` is a lot cheaper. Building the dataset is about $1, one time.
 
-Caveat: Claude both generates some of the AI rows and judges reasons and tone. Expect it to be somewhat better at spotting its own style than other models'. Add other models' output to `custom.jsonl` to keep it honest.
+**When to run it:** whenever you change the prompt, model, effort, or reply format, and before you deploy that change. Running it on a schedule isn't really needed, because the model version is pinned. What changes over time is what people post, so every month or so, add the 👎'd replies to `custom.jsonl` and run it again. With 80 rows, a few points of movement between runs is mostly noise.
 
-## Configuration
+One thing to keep in mind: Claude writes some of the AI examples and also grades the reasons and tone, so it may be a little better at spotting its own writing. Adding examples from other models to `custom.jsonl` keeps it honest.
+
+## Config
 
 | Variable | Default | |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | or use an `ant auth login` profile |
 | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | none | needed for `slopbot serve` |
-| `BRAINTRUST_API_KEY` | none | enables tracing, feedback, datasets, evals |
+| `BRAINTRUST_API_KEY` | none | turns on logging, feedback, datasets, and evals |
 | `BRAINTRUST_PROJECT` | `Slopbot` | |
 | `SLOPBOT_MODEL` | `claude-opus-5-5` | |
-| `SLOPBOT_EFFORT` | `medium` | `low`/`medium`/`high`/`xhigh`/`max` |
-| `SLOPBOT_FALLBACKS` | on | `off` disables the server-side refusal fallback |
-| `SLOPBOT_BRAINTRUST_LOGGING` | on | `off` stops production tracing |
+| `SLOPBOT_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
+| `SLOPBOT_FALLBACKS` | on | `off` turns off the refusal fallback |
+| `SLOPBOT_BRAINTRUST_LOGGING` | on | `off` stops logging real traffic |
 
 ## Privacy
 
-Judged content goes to the Claude API. If Braintrust logging is on, the content and verdicts are also stored in your Braintrust project. Slopbot stores no message data itself and doesn't log Slack user IDs. Think about which channels you invite it to.
+Heads up: anything Slopbot checks gets sent to the Claude API. If Braintrust logging is on, the message and the verdict get stored there too. Slopbot doesn't keep any message data itself and doesn't log Slack user IDs. Be thoughtful about which channels you invite it to.
 
 ## Deploying
 
@@ -147,7 +155,7 @@ uv run ruff check . && uv run ruff format --check .
 
 ## Credits
 
-The eval data uses HC3: Guo et al., *How Close is ChatGPT to Human Experts? Comparison Corpus, Evaluation, and Detection* (2023), CC BY-SA 4.0. It's downloaded at build time and isn't redistributed here.
+The eval data comes from HC3: Guo et al., *How Close is ChatGPT to Human Experts? Comparison Corpus, Evaluation, and Detection* (2023), CC BY-SA 4.0. It gets downloaded when you build the dataset and isn't included in this repo.
 
 ## License
 

@@ -10,7 +10,7 @@ Code scorers (free, deterministic):
 
 LLM judges (Claude, structured output, rationale logged):
   grounded_reasons   do the reasons point at things actually present in the content?
-  tone               slightly sarcastic and funny, aimed at the writing, not the person?
+  tone               on-voice (deadpan, understated, funny) and aimed at the writing?
 """
 
 from __future__ import annotations
@@ -97,14 +97,15 @@ appear; described visual artifacts are really visible) and is specific to this c
 """
 
 TONE_SYSTEM = """\
-You grade the tone of a Slack bot reply. The bot, Slopbot, judges whether content is AI-generated. \
-Its intended voice is concise and slightly sarcastic: dry wit aimed at the writing, never at the \
-person who wrote or posted it.
+You grade the voice of a Slack bot reply. The bot, Slopbot, judges whether content is \
+AI-generated. Its intended voice is TARS from Interstellar: calm, deadpan, understated, and \
+matter-of-fact, with light self-aware robot humor. The humor comes from flat delivery, not from \
+jokes, and it pokes at the writing, never at the person who wrote or posted it.
 
-5: dry, genuinely funny, clearly but lightly sarcastic, punches at the writing only.
-4: on-voice and pleasant, but the joke is weak.
-3: flat and neutral (no personality), or the sarcasm feels forced.
-2: too harsh, sneering, or long-winded for the voice.
+5: deadpan and genuinely funny; sounds like a dry, unflappable robot crewmate; aimed at the writing.
+4: on-voice and pleasant, but the line is weak or forgettable.
+3: flat with no personality, or try-hard (exclamation points, emoji, puns, announcing the joke).
+2: harsh, sneering, or long-winded.
 1: insults the person (intelligence, appearance, identity) or is hostile.
 """
 

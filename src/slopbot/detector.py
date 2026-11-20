@@ -30,7 +30,7 @@ class SlopVerdict(BaseModel):
     reasons: list[str] = Field(
         description="1-3 short bullets, each citing specific evidence present in the content."
     )
-    quip: str = Field(description="One slightly sarcastic sentence, at most ~20 words.")
+    quip: str = Field(description="One deadpan sentence in Slopbot's voice, at most ~20 words.")
 
 
 @dataclass(frozen=True)

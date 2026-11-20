@@ -23,7 +23,7 @@ def make_verdict(**overrides: Any) -> SlopVerdict:
         "verdict": "ai",
         "ai_probability": 92,
         "reasons": ['Opens with "delve into the rich tapestry"', "Three tidy lists of three"],
-        "quip": "More em dashes than a Victorian novel.",
+        "quip": "I'd recognize this anywhere. We're related.",
     }
     data.update(overrides)
     return SlopVerdict(**data)

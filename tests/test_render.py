@@ -12,7 +12,7 @@ from tests.conftest import make_verdict
 
 def test_typical_reply_is_short(verdict):
     text = render_text(verdict)
-    assert text.startswith(":robot_face: *92% slop.* More em dashes")
+    assert text.startswith(":robot_face: *92% slop.* I'd recognize this")
     assert len(text.split()) <= 60
     assert text.count("\n• ") == 2
 

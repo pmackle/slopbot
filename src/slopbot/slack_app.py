@@ -23,12 +23,12 @@ USAGE = (
     "judge that one, DM me the suspect text, or use the *Slop check* message shortcut "
     "(the ⋯ menu on any message)."
 )
-EMPTY = "There's nothing here to judge. Even I can't find slop in a void."
-REFUSED = "I've been told not to judge this one. Which is, frankly, its own kind of verdict."
-BROKEN = "I tried to judge this and broke instead. Try again in a minute."
+EMPTY = "There's nothing here to judge. I checked twice."
+REFUSED = "I've been instructed not to judge this one. I'm choosing to respect that."
+BROKEN = "Something on my end broke. It wasn't you. Try again in a minute."
 NOT_IN_CHANNEL = (
-    "I'm not in this channel, so this verdict is just for you. Invite me (`/invite @Slopbot`) "
-    "if you'd like to share the judgment publicly."
+    "I'm not in this channel, so only you can see this. Invite me (`/invite @Slopbot`) "
+    "if you'd like witnesses."
 )
 
 
@@ -168,9 +168,9 @@ def create_app(settings: Settings, **app_kwargs: Any) -> App:
         if bt_logger is not None and span_id:
             bt_logger.log_feedback(id=span_id, scores={"slack_thumbs": score}, source="external")
         reply = (
-            "Noted. My ego thanks you."
+            "Noted. I'll try to stay humble about it."
             if score
-            else "Noted. I'll pretend to learn from this, just like a real coworker."
+            else "Noted. I'll do better. Statistically."
         )
         respond(response_type="ephemeral", replace_original=False, text=reply)
 
