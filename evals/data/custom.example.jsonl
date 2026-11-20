@@ -1,0 +1,7 @@
+// Copy to evals/data/custom.jsonl (gitignored, so real Slack messages never land in this public repo).
+// One JSON object per line. label is "ai" or "human". Only add messages whose origin you actually know.
+// Lines starting with // are ignored.
+{"text": "<paste a real message a human wrote here>", "label": "human", "source": "slack"}
+{"text": "<paste text you know was AI-generated here>", "label": "ai", "source": "slack", "label_source": "author confirmed they used ChatGPT"}
+{"image_path": "evals/data/images/your-ai-image.png", "label": "ai", "source": "midjourney"}
+{"image_path": "evals/data/images/your-real-photo.jpg", "label": "human", "source": "phone camera"}

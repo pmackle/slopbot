@@ -1,0 +1,46 @@
+# Create the app at https://api.slack.com/apps -> Create New App -> From a manifest, and paste this.
+display_information:
+  name: Slopbot
+  description: Sniffs out AI slop. Judgmental, concise, usually right.
+  background_color: "#1f1f24"
+  long_description: >-
+    Slopbot tells you whether a message or image looks AI-generated, and why, in one or two
+    slightly sarcastic lines. Mention @Slopbot in a thread to judge the parent message, mention
+    it right after a message to judge that one, DM it the suspect text, or use the "Slop check"
+    shortcut from any message's ⋯ menu. Verdicts are probabilistic; don't use them to discipline
+    anyone.
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Slopbot
+    always_online: true
+  shortcuts:
+    - name: Slop check
+      type: message
+      callback_id: slop_check
+      description: Is this AI slop? Find out, with commentary.
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - channels:history
+      - chat:write
+      - commands
+      - files:read
+      - groups:history
+      - im:history
+      - mpim:history
+      - reactions:write
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.im
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
