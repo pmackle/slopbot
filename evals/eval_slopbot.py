@@ -4,8 +4,9 @@
   SLOPBOT_EVAL_FILE=evals/data/dataset.jsonl \\
     uv run braintrust eval --no-send-logs evals/eval_slopbot.py  # local file, nothing uploaded
 
-Knobs (env): SLOPBOT_MODEL, SLOPBOT_EFFORT, SLOPBOT_TRIALS, SLOPBOT_EVAL_CONCURRENCY,
-SLOPBOT_JUDGE_MODEL, SLOPBOT_JUDGE_EFFORT, SLOPBOT_SKIP_JUDGES=1 (code scorers only, cheaper).
+Knobs (env): SLOPBOT_MODEL, SLOPBOT_JUDGE_MODEL, SLOPBOT_EFFORT, SLOPBOT_TRIALS,
+SLOPBOT_EVAL_CONCURRENCY, SLOPBOT_JUDGE_EFFORT, SLOPBOT_SKIP_JUDGES=1 (code scorers only).
+Configured models are checked against the gateway's /model/info before anything runs.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from evals.common import DATASET_NAME, ROOT, load_images, read_jsonl  # noqa: E4
 from evals.scorers import ALL_SCORERS, CODE_SCORERS  # noqa: E402
 from slopbot.config import get_settings  # noqa: E402
 from slopbot.detector import detect  # noqa: E402
+from slopbot.gateway import verify_models  # noqa: E402
 from slopbot.render import render_text  # noqa: E402
 
 load_dotenv(ROOT / ".env")
@@ -55,6 +57,12 @@ def task(input: dict[str, Any], hooks: Any) -> dict[str, Any]:
 
 skip_judges = os.getenv("SLOPBOT_SKIP_JUDGES", "").lower() in ("1", "true", "yes")
 
+# Fail fast (before spending anything) if a configured model isn't on the gateway.
+models_in_use = {"SLOPBOT_MODEL": settings.model}
+if not skip_judges:
+    models_in_use["SLOPBOT_JUDGE_MODEL"] = settings.judge_model
+verify_models(settings, models_in_use)
+
 Eval(
     settings.braintrust_project,
     data=data,
@@ -65,7 +73,8 @@ Eval(
         "model": settings.model,
         "effort": settings.effort,
         "fallbacks": settings.fallbacks,
-        "judge_model": None if skip_judges else os.getenv("SLOPBOT_JUDGE_MODEL", "claude-opus-5-5"),
+        "judge_model": None if skip_judges else settings.judge_model,
+        "via_gateway": settings.uses_gateway,
         "dataset": os.getenv("SLOPBOT_EVAL_FILE") or DATASET_NAME,
     },
     trial_count=int(os.getenv("SLOPBOT_TRIALS", "1")),

@@ -22,7 +22,8 @@ from braintrust import Score
 from pydantic import BaseModel, Field
 
 from evals.common import load_images
-from slopbot.detector import FALLBACK_BETA, build_messages, get_client
+from slopbot.config import get_settings
+from slopbot.detector import build_messages, fallback_kwargs, get_client
 
 CONCISE_FULL_MARKS = 60
 CONCISE_ZERO = 150
@@ -111,16 +112,16 @@ jokes, and it pokes at the writing, never at the person who wrote or posted it.
 
 
 def _judge(system: str, content: list[dict[str, Any]]) -> JudgeResult:
-    client = get_client()
+    settings = get_settings()
+    client = get_client(settings)
     response = client.beta.messages.parse(
-        model=os.getenv("SLOPBOT_JUDGE_MODEL", "claude-opus-5-5"),
+        model=settings.judge_model,
         max_tokens=16000,
         system=system,
         messages=[{"role": "user", "content": content}],
         output_format=JudgeResult,
         output_config={"effort": os.getenv("SLOPBOT_JUDGE_EFFORT", "medium")},
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
+        **fallback_kwargs(settings),
     )
     if response.stop_reason != "end_turn" or response.parsed_output is None:
         # Raise so Braintrust records a grader error instead of a fake zero.

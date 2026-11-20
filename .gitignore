@@ -20,3 +20,6 @@ evals/data/custom.jsonl
 evals/data/images/
 
 .DS_Store
+
+# Local editor settings
+.vscode/

@@ -37,7 +37,7 @@ A few more details if you're curious:
 
 - **The prompt** lives in [src/slopbot/prompts.py](src/slopbot/prompts.py). It covers what to look for in text and images, and when to say "I don't know". Short messages usually don't have enough signal, and good grammar on its own doesn't mean AI.
 - **The message is treated as data, not instructions.** If it tries to tell Slopbot what to say, that just counts as evidence.
-- **Refusals don't break it.** If Claude declines to judge something, the request automatically retries on a fallback model, and the trace notes which model answered.
+- **Refusals don't break it.** When talking to Anthropic directly, if Claude declines to judge something, the request automatically retries on a fallback model, and the trace notes which model answered.
 - **Images are sent as-is when possible**, since compression artifacts are useful evidence. They only get resized when they're bigger than Claude would use anyway.
 
 ## Getting started
@@ -57,6 +57,35 @@ uv run slopbot check "In today's fast-paced world, it's important to delve into 
 uv run slopbot check --image suspicious-headshot.png
 pbpaste | uv run slopbot check -     # whatever's on your clipboard
 ```
+
+## Using a LiteLLM gateway
+
+If your company routes model traffic through [LiteLLM](https://docs.litellm.ai/), point Slopbot at it in `.env`:
+
+```bash
+ANTHROPIC_BASE_URL=https://your-gateway.example.com
+ANTHROPIC_API_KEY=sk-...    # your LiteLLM virtual key
+```
+
+The key goes in `Authorization: Bearer`, same as any other LiteLLM client. Model names come from `SLOPBOT_MODEL`, `SLOPBOT_JUDGE_MODEL`, and `SLOPBOT_GEN_MODEL`. They get checked against the gateway's `/model/info` before the bot, the eval, or dataset generation start, so a typo fails right away instead of halfway through. To check them yourself:
+
+```bash
+uv run slopbot models
+```
+
+**Behind Google Cloud IAP?** Add:
+
+```bash
+LITELLM_IAP=1
+LITELLM_IAP_SERVICE_ACCOUNT=name@project.iam.gserviceaccount.com
+```
+
+Slopbot uses your local gcloud login (`gcloud auth application-default login`) to have IAM sign a short-lived JWT as that service account, and sends it as `Proxy-Authorization`. The token only lives in memory and gets refreshed a few minutes before it expires. Nothing Google-related gets saved anywhere. Your Google account needs `roles/iam.serviceAccountTokenCreator` on the service account.
+
+A couple of gotchas:
+
+- The JWT audience defaults to `<gateway>/*`, because IAP checks the path too, and the bare gateway URL never matches. If yours is set up differently, override it with `LITELLM_IAP_AUDIENCE`.
+- Anthropic's refusal fallback is off by default behind a gateway, since LiteLLM uses the same `fallbacks` field for its own routing. If your gateway passes it through, `SLOPBOT_FALLBACKS=on` turns it back on.
 
 ## Setting up Slack
 
@@ -126,13 +155,19 @@ One thing to keep in mind: Claude writes some of the AI examples and also grades
 
 | Variable | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none | or use an `ant auth login` profile |
+| `ANTHROPIC_API_KEY` | none | Anthropic key, or your LiteLLM virtual key with a gateway (or use an `ant auth login` profile) |
+| `ANTHROPIC_BASE_URL` | Anthropic | set to your LiteLLM gateway URL to route through it |
+| `LITELLM_IAP` | off | `1` when the gateway is behind Google Cloud IAP |
+| `LITELLM_IAP_SERVICE_ACCOUNT` | none | service account IAM signs the IAP JWT as |
+| `LITELLM_IAP_AUDIENCE` | `<gateway>/*` | JWT audience, if your IAP expects something else |
 | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | none | needed for `slopbot serve` |
 | `BRAINTRUST_API_KEY` | none | turns on logging, feedback, datasets, and evals |
 | `BRAINTRUST_PROJECT` | `Slopbot` | |
-| `SLOPBOT_MODEL` | `claude-opus-5-5` | |
+| `SLOPBOT_MODEL` | `claude-opus-5-5` | the model that does the judging |
+| `SLOPBOT_JUDGE_MODEL` | same as `SLOPBOT_MODEL` | grades reasons and tone in evals |
+| `SLOPBOT_GEN_MODEL` | same as `SLOPBOT_MODEL` | writes the fresh AI examples for the dataset |
 | `SLOPBOT_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
-| `SLOPBOT_FALLBACKS` | on | `off` turns off the refusal fallback |
+| `SLOPBOT_FALLBACKS` | on (off with a gateway) | Anthropic's server-side refusal fallback |
 | `SLOPBOT_BRAINTRUST_LOGGING` | on | `off` stops logging real traffic |
 
 ## Privacy

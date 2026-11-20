@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-import anthropic
 from braintrust import current_span, traced, wrap_anthropic
 from pydantic import BaseModel, Field
 
 from .config import Settings, get_settings
+from .gateway import make_anthropic_client
 from .prompts import SYSTEM_PROMPT, wrap_content
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -62,15 +62,24 @@ class DetectionRefused(SlopbotError):
 _client: Any = None
 
 
-def get_client() -> Any:
-    """Anthropic client, wrapped so every call is traced in Braintrust (no-op when logging is off).
+def get_client(settings: Settings | None = None) -> Any:
+    """Shared Anthropic client, wrapped so every call is traced in Braintrust (no-op when off).
 
-    Credentials resolve from the environment: ANTHROPIC_API_KEY, or an `ant auth login` profile.
+    Points at the LiteLLM gateway when ANTHROPIC_BASE_URL is set (see gateway.py); otherwise
+    Anthropic directly, with credentials from ANTHROPIC_API_KEY or an `ant auth login` profile.
     """
     global _client
     if _client is None:
-        _client = wrap_anthropic(anthropic.Anthropic())
+        _client = wrap_anthropic(make_anthropic_client(settings or get_settings()))
     return _client
+
+
+def fallback_kwargs(settings: Settings) -> dict[str, Any]:
+    """Server-side refusal fallback: if the model declines, the API re-runs the request on a
+    fallback model inside the same call. Off by default behind a gateway (see config.py)."""
+    if not settings.fallbacks:
+        return {}
+    return {"betas": [FALLBACK_BETA], "fallbacks": "default"}
 
 
 def build_messages(text: str | None, images: Sequence[ImageInput]) -> list[dict[str, Any]]:
@@ -102,12 +111,8 @@ def build_request(
         "messages": build_messages(text, images),
         "output_format": SlopVerdict,
         "output_config": {"effort": settings.effort},
+        **fallback_kwargs(settings),
     }
-    if settings.fallbacks:
-        # If the model declines (safety classifier), the API re-runs the request on a
-        # fallback model inside the same call.
-        request["betas"] = [FALLBACK_BETA]
-        request["fallbacks"] = "default"
     return request
 
 
@@ -132,7 +137,7 @@ def detect(
 ) -> DetectionResult:
     """Judge `text` and/or `images`. Raises SlopbotError on refusals or unusable output."""
     settings = settings or get_settings()
-    client = client or get_client()
+    client = client or get_client(settings)
     span = current_span()
     span.log(
         input={"text": text, "images": [i.name for i in images]},
