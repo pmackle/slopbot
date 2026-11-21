@@ -11,7 +11,7 @@ from braintrust import current_span, traced, wrap_anthropic
 from pydantic import BaseModel, Field
 
 from .config import Settings, get_settings
-from .gateway import make_anthropic_client
+from .gateway import SPEND, make_anthropic_client
 from .prompts import SYSTEM_PROMPT, wrap_content
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -47,6 +47,7 @@ class DetectionResult:
     fell_back: bool
     span_id: str | None
     usage: dict[str, Any] = field(default_factory=dict)
+    cost_usd: float | None = None  # as charged by the gateway; None when talking to Anthropic
 
 
 class SlopbotError(Exception):
@@ -149,7 +150,9 @@ def detect(
         },
     )
 
+    SPEND.take_last()  # clear any stale value on this thread
     response = client.beta.messages.parse(**build_request(text, images, settings))
+    cost_usd = SPEND.take_last()
 
     fell_back = any(
         getattr(entry, "type", None) == "fallback_message"
@@ -171,9 +174,10 @@ def detect(
         fell_back=fell_back,
         span_id=getattr(span, "id", None) or None,
         usage=_usage_dict(response.usage),
+        cost_usd=cost_usd,
     )
     span.log(
         output=verdict.model_dump(),
-        metadata={"served_model": response.model, "fell_back": fell_back},
+        metadata={"served_model": response.model, "fell_back": fell_back, "cost_usd": cost_usd},
     )
     return result

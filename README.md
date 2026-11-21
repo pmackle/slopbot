@@ -111,7 +111,7 @@ Every check gets logged: the message, the verdict, model, effort, tokens, latenc
 
 ### The dataset
 ```bash
-uv run python evals/build_dataset.py                             # build + upload "slop-detection-v1"
+SLOPBOT_GEN_MODELS=mixed uv run python evals/build_dataset.py     # build + upload "slop-detection-v1"
 uv run python evals/build_dataset.py --no-generate --no-upload   # free, local only
 ```
 This builds 80 examples from 40 questions in [HC3](https://huggingface.co/datasets/Hello-SimpleAI/HC3) `reddit_eli5`:
@@ -120,7 +120,9 @@ This builds 80 examples from 40 questions in [HC3](https://huggingface.co/datase
 |---|---|
 | human (40) | Real Reddit answers, written before ChatGPT existed |
 | ai (20) | ChatGPT's answers to the same questions (Dec 2022) |
-| ai (20) | Fresh `claude-opus-5-5` answers to the same questions. Half are normal assistant style, half are told to sound like a Redditor |
+| ai (20) | Fresh answers to the same questions from Claude, GPT, Gemini, and Kimi (5 each). Half are normal assistant style, half are told to sound like a Redditor |
+
+The AI examples come from four different labs on purpose. Models are best at spotting writing from their own family, so if Claude wrote all of them, Claude would look better than it is. (`SLOPBOT_GEN_MODELS=mixed` uses the list in [evals/models.py](evals/models.py). Leave it off and `SLOPBOT_GEN_MODEL` writes them all.)
 
 The builder also cleans up a couple of things that would let a detector cheat. HC3's human answers have weird tokenized spacing (`ca n't`, `word ,`) that the AI answers don't, so that gets fixed. Each human answer is also matched to an AI answer of about the same length. The result is 50/50, so guessing gets you 50%.
 
@@ -134,6 +136,13 @@ SLOPBOT_SKIP_JUDGES=1 uv run braintrust eval evals/eval_slopbot.py # code scorer
 ```
 It runs the same `detect()` and `render()` code the bot uses. If the API errors out, that shows up as an error, not a wrong answer.
 
+**Comparing models:** this runs one experiment per model, back to back, so they line up side by side in Braintrust:
+```bash
+SLOPBOT_EVAL_MODELS=candidates uv run python evals/eval_slopbot.py           # the list below
+SLOPBOT_EVAL_MODELS=claude-haiku-5-5,gpt-6.2-sol uv run python evals/eval_slopbot.py
+```
+The candidates (in [evals/models.py](evals/models.py)) cover four labs and a range of prices: Claude Opus 5.5, Sonnet 5.5, and Haiku 5.5, GPT-6.2 Sol, Gemini 4 Carbon, and Kimi K3.1. The judge stays the same across the comparison (`SLOPBOT_JUDGE_MODEL`), so the scores are comparable.
+
 | Scorer | Type | What it checks |
 |---|---|---|
 | `verdict_correct` | code | Did it get the label right? (`mixed` and `unsure` count as misses) |
@@ -145,11 +154,11 @@ It runs the same `detect()` and `render()` code the bot uses. If the API errors 
 | `grounded_reasons` | Claude judge | Are the reasons actually in the message? |
 | `tone` | Claude judge | Does it sound like Slopbot, without taking shots at the person? |
 
-**Cost:** roughly $4–7 for a full 100-row run, or $2–4 with `SLOPBOT_SKIP_JUDGES=1`. Most of that is Claude's thinking, so `SLOPBOT_EFFORT=low` is a lot cheaper. Building the dataset is about $1, one time.
+**Cost:** through a LiteLLM gateway, every call's real cost comes back in a response header. Each eval row gets a `cost_usd` in its metadata, and the run prints a per-model total at the end. For reference, a full run with Opus as both detector and judge (judge at `SLOPBOT_JUDGE_EFFORT=low`) cost **$2.01**. Building the dataset with mixed generators cost $0.16. `SLOPBOT_SKIP_JUDGES=1` cuts out the judge calls, which are about half of that.
 
 **When to run it:** whenever you change the prompt, model, effort, or reply format, and before you deploy that change. Running it on a schedule isn't really needed, because the model version is pinned. What changes over time is what people post, so every month or so, add the 👎'd replies to `custom.jsonl` and run it again. With 80 rows, a few points of movement between runs is mostly noise.
 
-One thing to keep in mind: Claude writes some of the AI examples and also grades the reasons and tone, so it may be a little better at spotting its own writing. Adding examples from other models to `custom.jsonl` keeps it honest.
+One thing to keep in mind: the judge is Claude, so `tone` and `grounded_reasons` may lean a little toward Claude's style. The accuracy scores don't have that problem, since they're checked in code.
 
 ## Config
 
@@ -167,6 +176,8 @@ One thing to keep in mind: Claude writes some of the AI examples and also grades
 | `SLOPBOT_MODEL` | `claude-opus-5-5` | the model that does the judging |
 | `SLOPBOT_JUDGE_MODEL` | same as `SLOPBOT_MODEL` | grades reasons and tone in evals |
 | `SLOPBOT_GEN_MODEL` | same as `SLOPBOT_MODEL` | writes the fresh AI examples for the dataset |
+| `SLOPBOT_GEN_MODELS` | none | `mixed` (one model per lab) or a comma list, rotated across the AI examples |
+| `SLOPBOT_EVAL_MODELS` | `SLOPBOT_MODEL` | `candidates` or a comma list, one experiment per model |
 | `SLOPBOT_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
 | `SLOPBOT_FALLBACKS` | on (off with a gateway) | Anthropic's server-side refusal fallback |
 | `SLOPBOT_BRAINTRUST_LOGGING` | on | `off` stops logging real traffic |

@@ -271,3 +271,30 @@ def test_litellm_key_rejection_is_explained():
     transport = model_info_transport(status=401)
     with pytest.raises(GatewayError, match="ANTHROPIC_API_KEY"):
         fetch_gateway_models(gateway_settings(iap=False), transport=transport)
+
+
+def test_gateway_cost_header_is_recorded_per_call():
+    from slopbot.gateway import SPEND
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            headers={"x-litellm-response-cost": "0.0123", "x-litellm-model-group": "test-model"},
+            json={
+                "id": "msg_1",
+                "type": "message",
+                "role": "assistant",
+                "model": "test-model",
+                "content": [{"type": "text", "text": jsonlib.dumps(VERDICT)}],
+                "stop_reason": "end_turn",
+                "stop_sequence": None,
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            },
+        )
+
+    settings = gateway_settings(iap=False, model="test-model")
+    before = SPEND.snapshot().get("test-model", 0.0)
+    client = make_anthropic_client(settings, transport=httpx2.MockTransport(handler))
+    result = detect("text", settings=settings, client=client)
+    assert result.cost_usd == pytest.approx(0.0123)
+    assert SPEND.snapshot()["test-model"] == pytest.approx(before + 0.0123)

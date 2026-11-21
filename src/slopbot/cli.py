@@ -142,6 +142,7 @@ def _check(text: str | None, image_paths: list[str], as_json: bool) -> int:
                     **result.verdict.model_dump(),
                     "served_model": result.served_model,
                     "usage": result.usage,
+                    "cost_usd": result.cost_usd,
                 },
                 indent=2,
             )

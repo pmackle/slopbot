@@ -7,6 +7,8 @@
   defaults to `<gateway>/*` because IAP matches `aud` against the request path. It lives in
   memory only and is re-signed a few minutes before it expires. No Google credentials are stored.
 - Model names are checked against the gateway's `GET /model/info`.
+- Every response's `x-litellm-response-cost` header is recorded in SPEND, so evals report
+  what they actually cost on the key's budget.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections import defaultdict
 from collections.abc import Callable, Mapping
 from functools import lru_cache
 from typing import Any
@@ -124,6 +127,54 @@ def iap_source(settings: Settings) -> IapJwtSource | None:
     return _shared_iap_source(settings.iap_service_account, settings.iap_audience)
 
 
+class SpendMeter:
+    """Adds up what the gateway says each call cost (`x-litellm-response-cost`), per model.
+
+    `take_last()` returns the cost of the most recent call made on the current thread, which is
+    how detect() attaches a cost to its own call even when evals run calls in parallel threads.
+    """
+
+    COST_HEADER = "x-litellm-response-cost"
+    MODEL_HEADER = "x-litellm-model-group"
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._local = threading.local()
+        self.cost_by_model: defaultdict[str, float] = defaultdict(float)
+        self.calls_by_model: defaultdict[str, int] = defaultdict(int)
+
+    def record(self, response: Any) -> None:
+        raw = response.headers.get(self.COST_HEADER)
+        if raw is None:
+            return
+        try:
+            cost = float(raw)
+        except ValueError:
+            return
+        model = response.headers.get(self.MODEL_HEADER) or "unknown"
+        with self._lock:
+            self.cost_by_model[model] += cost
+            self.calls_by_model[model] += 1
+        self._local.last = cost
+
+    def take_last(self) -> float | None:
+        cost = getattr(self._local, "last", None)
+        self._local.last = None
+        return cost
+
+    def snapshot(self) -> dict[str, float]:
+        with self._lock:
+            return dict(self.cost_by_model)
+
+    @property
+    def total(self) -> float:
+        with self._lock:
+            return sum(self.cost_by_model.values())
+
+
+SPEND = SpendMeter()
+
+
 def make_anthropic_client(
     settings: Settings,
     *,
@@ -142,16 +193,18 @@ def make_anthropic_client(
         kwargs["api_key"] = settings.api_key
 
     iap = iap or iap_source(settings)
-    if iap is not None or transport is not None:
-        http_kwargs: dict[str, Any] = {}
+    if settings.uses_gateway or transport is not None:
+        http_kwargs: dict[str, Any] = {"event_hooks": {"request": [], "response": []}}
         if transport is not None:
             http_kwargs["transport"] = transport
+        if settings.uses_gateway:
+            http_kwargs["event_hooks"]["response"].append(SPEND.record)
         if iap is not None:
 
             def add_iap_header(request: Any) -> None:
                 request.headers["Proxy-Authorization"] = iap.header_value()
 
-            http_kwargs["event_hooks"] = {"request": [add_iap_header]}
+            http_kwargs["event_hooks"]["request"].append(add_iap_header)
             # IAP answers unauthenticated requests with a redirect to a Google login page.
             # Surface that as an error instead of following it into HTML.
             http_kwargs["follow_redirects"] = False
