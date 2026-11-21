@@ -98,6 +98,13 @@ def test_gateway_settings(clean_env):
     assert s.fallbacks is True and s.iap_audience == GATEWAY + "/v1/*"
 
 
+def test_braintrust_project_id_wins_over_name(clean_env):
+    clean_env.delenv("BRAINTRUST_PROJECT_ID", raising=False)
+    assert get_settings().braintrust_target == {"project": "Slopbot"}
+    clean_env.setenv("BRAINTRUST_PROJECT_ID", "proj-123")
+    assert get_settings().braintrust_target == {"project_id": "proj-123"}
+
+
 def test_iap_needs_gateway_and_service_account(clean_env):
     clean_env.setenv("LITELLM_IAP", "1")
     with pytest.raises(ConfigError, match="ANTHROPIC_BASE_URL"):

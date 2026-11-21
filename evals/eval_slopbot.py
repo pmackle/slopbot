@@ -44,7 +44,7 @@ def data() -> Any:
             }
             for r in read_jsonl(local)
         ]
-    return init_dataset(project=settings.braintrust_project, name=DATASET_NAME)
+    return init_dataset(**settings.braintrust_target, name=DATASET_NAME)
 
 
 def task(input: dict[str, Any], hooks: Any) -> dict[str, Any]:
@@ -65,6 +65,7 @@ verify_models(settings, models_in_use)
 
 Eval(
     settings.braintrust_project,
+    project_id=settings.braintrust_project_id,  # wins over the name when set
     data=data,
     task=task,
     scores=CODE_SCORERS if skip_judges else ALL_SCORERS,

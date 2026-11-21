@@ -98,7 +98,7 @@ def create_app(settings: Settings, **app_kwargs: Any) -> App:
     app = App(token=token, **app_kwargs)
     # Production tracing: every detect() call becomes a trace in this Braintrust project.
     bt_logger = (
-        braintrust.init_logger(project=settings.braintrust_project)
+        braintrust.init_logger(**settings.braintrust_target)
         if settings.braintrust_enabled
         else None
     )

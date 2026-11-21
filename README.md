@@ -162,7 +162,8 @@ One thing to keep in mind: Claude writes some of the AI examples and also grades
 | `LITELLM_IAP_AUDIENCE` | `<gateway>/*` | JWT audience, if your IAP expects something else |
 | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | none | needed for `slopbot serve` |
 | `BRAINTRUST_API_KEY` | none | turns on logging, feedback, datasets, and evals |
-| `BRAINTRUST_PROJECT` | `Slopbot` | |
+| `BRAINTRUST_PROJECT` | `Slopbot` | project name (created if it doesn't exist) |
+| `BRAINTRUST_PROJECT_ID` | none | use an existing project by ID instead of the name |
 | `SLOPBOT_MODEL` | `claude-opus-5-5` | the model that does the judging |
 | `SLOPBOT_JUDGE_MODEL` | same as `SLOPBOT_MODEL` | grades reasons and tone in evals |
 | `SLOPBOT_GEN_MODEL` | same as `SLOPBOT_MODEL` | writes the fresh AI examples for the dataset |

@@ -33,6 +33,7 @@ class Settings:
     iap_audience: str | None = None
 
     braintrust_project: str = "Slopbot"
+    braintrust_project_id: str | None = None
     braintrust_enabled: bool = False
     slack_bot_token: str | None = None
     slack_app_token: str | None = None
@@ -40,6 +41,13 @@ class Settings:
     @property
     def uses_gateway(self) -> bool:
         return bool(self.base_url)
+
+    @property
+    def braintrust_target(self) -> dict[str, str]:
+        """Which Braintrust project to use: the ID when set (it wins over the name)."""
+        if self.braintrust_project_id:
+            return {"project_id": self.braintrust_project_id}
+        return {"project": self.braintrust_project}
 
 
 def _bool(value: str | None, default: bool) -> bool:
@@ -90,6 +98,7 @@ def get_settings() -> Settings:
         # so the bare gateway URL never matches; `<gateway>/*` covers every endpoint.
         iap_audience=_str("LITELLM_IAP_AUDIENCE") or (f"{base_url}/*" if base_url else None),
         braintrust_project=os.getenv("BRAINTRUST_PROJECT", "Slopbot"),
+        braintrust_project_id=_str("BRAINTRUST_PROJECT_ID"),
         braintrust_enabled=bool(os.getenv("BRAINTRUST_API_KEY"))
         and _bool(os.getenv("SLOPBOT_BRAINTRUST_LOGGING"), True),
         slack_bot_token=_str("SLACK_BOT_TOKEN"),

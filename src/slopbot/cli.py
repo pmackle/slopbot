@@ -94,7 +94,7 @@ def _check(text: str | None, image_paths: list[str], as_json: bool) -> int:
 
     settings = get_settings()
     if settings.braintrust_enabled:
-        braintrust.init_logger(project=settings.braintrust_project)
+        braintrust.init_logger(**settings.braintrust_target)
     if text == "-":
         text = sys.stdin.read()
 

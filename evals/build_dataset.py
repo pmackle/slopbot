@@ -255,8 +255,8 @@ def main() -> int:
 
     import braintrust
 
-    project = os.getenv("BRAINTRUST_PROJECT", "Slopbot")
-    dataset = braintrust.init_dataset(project=project, name=DATASET_NAME)
+    target = settings.braintrust_target
+    dataset = braintrust.init_dataset(**target, name=DATASET_NAME)
     for r in rows:
         dataset.insert(
             id=r["id"],
@@ -266,7 +266,7 @@ def main() -> int:
             tags=r["tags"],
         )
     dataset.flush()
-    print(f"Uploaded to Braintrust: project={project!r} dataset={DATASET_NAME!r}")
+    print(f"Uploaded to Braintrust: {target} dataset={DATASET_NAME!r}")
     return 0
 
 
